@@ -1,8 +1,11 @@
 # Etapa 1: Compilación
-FROM eclipse-temurin:25-jdk AS build
+FROM maven:3.9.12-eclipse-temurin-25 AS build
+
 WORKDIR /app
-COPY . .
-RUN ./mvnw clean package -DskipTests
+
+COPY pom.xml .
+COPY src ./src
+RUN mvn clean package -DskipTests
 
 # Etapa 2: Imagen final ligera
 FROM eclipse-temurin:25-jre
