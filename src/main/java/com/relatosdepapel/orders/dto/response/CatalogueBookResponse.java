@@ -1,9 +1,10 @@
 package com.relatosdepapel.orders.dto.response;
 
+import java.math.BigDecimal;
+
 import lombok.Getter;
 import lombok.Setter;
 
-import java.math.BigDecimal;
 
 @Getter
 @Setter
@@ -20,8 +21,9 @@ public class CatalogueBookResponse {
         private String author;
         private String isbn;
         private String category;
-        private BigDecimal rating;
+        private Double rating;
         private Boolean visible;
         private Integer stock;
+        private BigDecimal unitPrice;
     }
 }

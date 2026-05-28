@@ -3,6 +3,7 @@ package com.relatosdepapel.orders.service.impl;
 import com.relatosdepapel.orders.dto.request.CreateOrderRequest;
 import com.relatosdepapel.orders.dto.request.OrderItemRequest;
 import com.relatosdepapel.orders.dto.response.CatalogueBookResponse;
+import com.relatosdepapel.orders.dto.response.CatalogueBookResponse.BookData;
 import com.relatosdepapel.orders.dto.response.OrderItemResponse;
 import com.relatosdepapel.orders.dto.response.OrderResponse;
 import com.relatosdepapel.orders.entity.Order;
@@ -23,6 +24,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -34,9 +36,6 @@ public class OrderServiceImpl implements OrderService {
 
     private final OrderRepository orderRepository;
     private final WebClient webClient;
-
-    private static final String INTERNAL_HEADER = "X-Internal-Request";
-    private static final String INTERNAL_TOKEN = "RelatosInternalSecretToken2026";
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -62,24 +61,23 @@ public class OrderServiceImpl implements OrderService {
             log.info("[Orders Flow] Validando libro ID: {}, cantidad solicitada: {}", itemReq.getBookId(), itemReq.getQuantity());
 
             // A. Consultar microservicio de catálogo mediante WebClient LoadBalanced y usando el nombre del servicio Eureka
-            CatalogueBookResponse catalogueResp;
+            BookData catalogueResp;
             try {
                 catalogueResp = webClient.get()
-                        .uri("http://catalogue-service/api/v1/books/{id}", itemReq.getBookId())
-                        .header(INTERNAL_HEADER, INTERNAL_TOKEN) // Añadimos credencial interna para saltar posibles ACLs
+                        .uri("http://catalogue/api/v1/books/{id}", itemReq.getBookId())
                         .retrieve()
-                        .bodyToMono(CatalogueBookResponse.class)
+                        .bodyToMono(BookData.class)
                         .block(); // Bloqueo síncrono para mantener consistencia dentro del flujo de transacción
             } catch (Exception e) {
                 log.error("Fallo en la comunicación remota con catalogue-service para ID: {}", itemReq.getBookId(), e);
                 throw new CatalogueCommunicationException("Servicio de catálogo fuera de línea temporalmente. Intente más tarde.");
             }
 
-            if (catalogueResp == null || !catalogueResp.isSuccess() || catalogueResp.getData() == null) {
+            if (catalogueResp == null) {
                 throw new ResourceNotFoundException("El libro con ID " + itemReq.getBookId() + " no está disponible en nuestro catálogo.");
             }
 
-            CatalogueBookResponse.BookData bookData = catalogueResp.getData();
+            BookData bookData = catalogueResp;
 
             // B. Validar stock disponible
             if (bookData.getStock() < itemReq.getQuantity()) {
@@ -88,19 +86,15 @@ public class OrderServiceImpl implements OrderService {
                         + itemReq.getQuantity() + ", Disponible: " + bookData.getStock());
             }
 
-            // C. Calcular precio unitario realista basado en su rating
-            BigDecimal rating = bookData.getRating() != null ? bookData.getRating() : BigDecimal.valueOf(4.0);
-            BigDecimal unitPrice = BigDecimal.valueOf(19.90).add(BigDecimal.valueOf(2.50).multiply(rating));
+            // C. Calcular precio unitario
+            BigDecimal unitPrice = bookData.getUnitPrice() != null ? bookData.getUnitPrice() : BigDecimal.valueOf(19.90);
             BigDecimal subtotal = unitPrice.multiply(BigDecimal.valueOf(itemReq.getQuantity()));
 
             // D. Descontar stock en el catálogo de forma transaccional remota
             try {
                 webClient.patch()
-                        .uri(uriBuilder -> uriBuilder
-                                .path("http://catalogue-service/api/v1/books/{id}/stock")
-                                .queryParam("quantity", -itemReq.getQuantity())
-                                .build(itemReq.getBookId()))
-                        .header(INTERNAL_HEADER, INTERNAL_TOKEN)
+                        .uri("http://catalogue/api/v1/books/{id}", itemReq.getBookId())
+                        .bodyValue(Map.of("stock", bookData.getStock() - itemReq.getQuantity())) // Enviar cantidad a descontar
                         .retrieve()
                         .bodyToMono(Void.class)
                         .block();
