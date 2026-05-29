@@ -33,3 +33,9 @@ management:
   endpoint:
     health:
       show-details: always
+
+# Data Seeding Configuration
+app:
+  seed:
+    enabled: true
+    orders-count: 15 # Número de órdenes a generar
