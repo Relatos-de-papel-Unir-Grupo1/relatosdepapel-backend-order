@@ -2,12 +2,12 @@ package com.relatosdepapel.orders.service.impl;
 
 import com.relatosdepapel.orders.dto.request.CreateOrderRequest;
 import com.relatosdepapel.orders.dto.request.OrderItemRequest;
-import com.relatosdepapel.orders.dto.response.CatalogueBookResponse;
 import com.relatosdepapel.orders.dto.response.CatalogueBookResponse.BookData;
 import com.relatosdepapel.orders.dto.response.OrderItemResponse;
 import com.relatosdepapel.orders.dto.response.OrderResponse;
 import com.relatosdepapel.orders.entity.Order;
 import com.relatosdepapel.orders.entity.OrderItem;
+import com.relatosdepapel.orders.event.service.OrderEventService;
 import com.relatosdepapel.orders.exception.CatalogueCommunicationException;
 import com.relatosdepapel.orders.exception.InsufficientStockException;
 import com.relatosdepapel.orders.exception.ResourceNotFoundException;
@@ -33,6 +33,7 @@ import java.util.stream.Collectors;
 public class OrderServiceImpl implements OrderService {
 
     private static final Logger log = LoggerFactory.getLogger(OrderServiceImpl.class);
+    private final OrderEventService orderEventService;
 
     private final OrderRepository orderRepository;
     private final WebClient webClient;
@@ -122,6 +123,10 @@ public class OrderServiceImpl implements OrderService {
         Order savedOrder = orderRepository.save(order);
         log.info("[Orders Flow] Orden creada exitosamente con número: {} e ID: {}", savedOrder.getOrderNumber(), savedOrder.getId());
         
+        //4. Crear Evento orden creada
+        orderEventService.publishOrderCreatedEvent(savedOrder);
+
+
         return mapToResponse(savedOrder);
     }
 
