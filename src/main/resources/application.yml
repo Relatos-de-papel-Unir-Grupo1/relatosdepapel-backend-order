@@ -1,6 +1,14 @@
 spring:
   application:
     name: orders-service
+  
+  ## RabbitMQ Configuration
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USER:dwfs}
+    password: ${RABBITMQ_PASSWORD:rabbitmq}
+    virtual-host: ${RABBITMQ_VHOST:/}
 
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:32792/order_db?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true}
@@ -39,3 +47,12 @@ app:
   seed:
     enabled: true
     orders-count: 15 # Número de órdenes a generar
+
+## RabbitMQ Event Configuration
+rabbitmq:
+  exchange:
+    orders: pedidos.creados
+  routing:
+    key:
+      order:
+        created: order.created
